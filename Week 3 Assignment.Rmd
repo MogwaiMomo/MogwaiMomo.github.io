@@ -1,0 +1,132 @@
+---
+title: 'Peer-Graded Assignment: R Markdown & Plotly'
+author: "Momoko Price"
+date: "10/16/2017"
+output: ioslides_presentation
+---
+
+<style type="text/css">
+
+p, td { 
+  font-size: 20px;
+  line-height: 1.5;
+}
+
+td { 
+  padding: 0px 10px;
+}
+  
+  
+</style>
+
+```{r dependencies, include=FALSE}
+library(dplyr)
+library(lattice)
+library(knitr)
+library(ggplot2)
+library(ggrepel)
+library(plotly)
+```
+
+# Stage 1: Exploratory Data Analysis
+
+## Our Question 
+"Was there any significant relationship between class, age, and/or sex and the mortality of those who were aboard on the Titanic?"
+
+## Data Summary (Out of the Box)
+```{r titanic, echo=FALSE}
+titanic_df <- data.frame(Titanic)
+str(titanic_df)
+
+```
+
+Note that this data is made up of 4 factor-based predictor variables (Class, Sex, Age, Survived), and one numerical outcome variable (Freq). 
+
+As such, we'll probably have to run some regression-based statistical tests to answer our question. 
+
+ 
+## Tidying Up the Data
+Since there were varying numbers of people in each Class aboard the Titanic, we should probably be looking at the proportions of people who died , rather than absolute numbers, so let's clean up the data and make an outcome variable called "Percent_Dead" instead. 
+
+Below shows the top 5 groups with the highest mortality: 
+
+```{r streamline, echo=FALSE, results = 'asis', warning=FALSE}
+# Get the total number of people per category 
+# (i.e. those who survived and those who didn't)
+
+by_cl_sx_age <- titanic_df %>%
+  group_by(Class, Sex, Age) %>%
+  summarise(Num_Passengers = sum(Freq))
+
+# Filter the original data to only include those 
+# who didn't survive
+
+death_only <- titanic_df %>%
+  filter(Survived == "No") %>%
+  select(-Survived, Deaths = Freq)
+
+# Create a new data set that calculates the % dead per group. 
+# Exclude any group that didn't have any people in them 
+# at all (i.e. that resulted in a NaN result in the 
+# "% Dead" category.)
+
+merged_df <- merge(by_cl_sx_age, death_only, by=c("Class", "Sex", "Age")) %>% 
+  mutate(Percent_Dead = round((Deaths / Num_Passengers)*100, digits = 2))
+
+final_df <- merged_df %>%
+  filter(complete.cases(Percent_Dead)) %>%
+  arrange(desc(Percent_Dead))
+
+kable(final_df[1:5, ], "html")
+attach(final_df)
+```
+
+## Visual Assessment of Trends
+
+```{r lattice1, echo=FALSE }
+dotplot(Num_Passengers ~ Class | Age * Sex, 
+  	main="# of Passengers vs Class by Age and Sex",
+   xlab="Class")
+
+```
+
+***
+
+```{r lattice2, echo=FALSE, message=FALSE }
+dotplot(Percent_Dead ~ Class | Age * Sex, 
+  	main="Mortality % vs Class by Age and Sex of Passenger",
+   xlab="Class")
+
+```
+
+One thing that stands out from the data is that overall there were far more adults than children on the Titanic, and that the mortality rates for adult men were high in all classes. 
+
+***
+
+```{r ggplot2, echo=FALSE, message=FALSE }
+
+p1 <- ggplot(final_df, aes(Age, Percent_Dead)) +
+  geom_point(aes(color = Sex, size = Num_Passengers)) + 
+  geom_label_repel(aes(label=Class),
+                   fontface = 'bold',
+                   box.padding = 0.35, point.padding = 0.5,
+                   segment.color = 'grey50') +
+  ggtitle("% Mortality of Titanic Passengers by Class, Sex, and Age") +
+  xlab("Age") + ylab("% Mortality") +
+  theme(
+    plot.title = element_text(size=14, face="bold")
+  )
+ 
+p1
+
+```
+
+We can also see that in general, 3rd-class passengers suffered mortality rates of over 50%, regardless of age and sex. 
+
+
+## Graph published with Plotly
+```{r plotly, echo=FALSE, warning=FALSE, message=FALSE }
+
+ggplotly(p1)
+
+```
